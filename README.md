@@ -1,6 +1,6 @@
 ## VN (Vector Neuron) Transformer (wip)
 
-A Transformer made of Rotation-equivariant Attention using <a href="https://arxiv.org/abs/2104.12229">Vector Neurons</a>
+A <a href="https://arxiv.org/abs/2206.04176">Transformer made of Rotation-equivariant Attention</a> using <a href="https://arxiv.org/abs/2104.12229">Vector Neurons</a>
 
 ## Citations
 
