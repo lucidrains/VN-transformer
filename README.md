@@ -45,6 +45,7 @@ $ python setup.py test
 - [ ] complete the perceiver like feature aggregation
 - [ ] offer both early and late fusion within `VNTransformer`
 - [ ] see if it is straightforward to make translation in/equivariant
+    - [ ] test on protein backbone denoising if above could be done
 
 ## Citations
 

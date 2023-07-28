@@ -16,7 +16,7 @@ def test_vn_invariant():
     R = rot(*torch.randn(3))
     out1 = layer(coors)
     out2 = layer(coors @ R)
-    print((out1 - out2).abs().max())
+
     assert torch.allclose(out1, out2, atol = 1e-6)
 
 # test equivariance
