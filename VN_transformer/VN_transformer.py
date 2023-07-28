@@ -10,6 +10,9 @@ from einops.layers.torch import Rearrange, Reduce
 def exists(val):
     return val is not None
 
+def default(val, d):
+    return val if exists(val) else d
+
 def inner_dot_product(x, y, *, dim = -1, keepdim = True):
     return (x * y).sum(dim = dim, keepdim = keepdim)
 
@@ -145,6 +148,28 @@ class VNLayerNorm(nn.Module):
         x = x / rearrange(norms.clamp(min = self.eps), '... -> ... 1')
         ln_out = self.ln(norms)
         return x * rearrange(ln_out, '... -> ... 1')
+
+class VNWeightedPool(nn.Module):
+    def __init__(
+        self,
+        dim,
+        dim_out = None,
+        num_pooled_tokens = 1,
+        squeeze_out_pooled_dim = True
+    ):
+        super().__init__()
+        dim_out = default(dim_out, dim)
+        self.weight = nn.Parameter(torch.randn(num_pooled_tokens, dim, dim_out))
+        self.squeeze_out_pooled_dim = num_pooled_tokens == 1 and squeeze_out_pooled_dim
+
+    def forward(self, x):
+        out = einsum('b n d c, m d e -> b m e c', x, self.weight)
+
+        if not self.squeeze_out_pooled_dim:
+            return out
+
+        out = rearrange(out, 'b 1 d c -> b d c')
+        return out
 
 # equivariant VN transformer encoder
 
