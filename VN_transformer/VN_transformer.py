@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch import nn, einsum, Tensor
 
 from einops import rearrange, repeat, reduce
-from einops.layers.torch import Rearrange
+from einops.layers.torch import Rearrange, Reduce
 
 # helper
 
@@ -30,13 +30,28 @@ class VNLinear(nn.Module):
     def __init__(
         self,
         dim_in,
-        dim_out
+        dim_out,
+        bias_epsilon = 0.
     ):
         super().__init__()
         self.weight = nn.Parameter(torch.randn(dim_out, dim_in))
 
+        self.bias = None
+        self.bias_epsilon = bias_epsilon
+
+        # in this paper, they propose going for quasi-equivariance with a small bias, controllable with epsilon, which they claim lead to better stability and results
+
+        if bias_epsilon > 0.:
+            self.bias = nn.Parameter(torch.randn(dim_out))
+
     def forward(self, x):
-        return einsum('... i c, o i -> ... o c', x, self.weight)
+        out = einsum('... i c, o i -> ... o c', x, self.weight)
+
+        if exists(self.bias):
+            bias = F.normalize(self.bias, dim = -1) * self.bias_epsilon
+            out = out + rearrange(bias, '... -> ... 1')
+
+        return out
 
 class VNReLU(nn.Module):
     def __init__(self, dim, eps = 1e-6):
@@ -117,6 +132,24 @@ class VNLayerNorm(nn.Module):
         x = x / rearrange(norms.clamp(min = self.eps), '... -> ... 1')
         ln_out = self.ln(norms)
         return x * rearrange(ln_out, '... -> ... 1')
+
+# invariant layers
+
+class VNInvariant(nn.Module):
+    def __init__(
+        self,
+        dim,
+        dim_coors = 3
+    ):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            VNLinear(dim, dim_coors),
+            VNReLU(dim_coors),
+            Rearrange('... d e -> ... e d')
+        )
+
+    def forward(self, x):
+        return einsum('b n d i, b n i o -> b n o', x, self.mlp(x))
 
 # main class
 
