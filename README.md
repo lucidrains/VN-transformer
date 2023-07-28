@@ -22,11 +22,12 @@ model = VNTransformer(
     dim = 64,
     depth = 2,
     dim_head = 64,
-    heads = 8
+    heads = 8,
+    beta_epsilon = 1e-6  # in this paper, they propose breaking equivariance with a tiny bit of bias noise in the VN linear. they claim this leads to improved stability. setting this to 0 would turn off the epsilon approximate equivariance
 )
 
 feats = torch.randn(1, 32, 64)
-coors = torch.randn(1, 32, 3)
+coors = torch.randn(1, 32, 3)    # (batch, sequence, spatial coordinates)
 
 feats, coors = model(feats, coors)
 ```
