@@ -87,14 +87,20 @@ class VNAttention(nn.Module):
         dim_head = 64,
         heads = 8,
         dim_coor = 3,
-        bias_epsilon = 0.
+        bias_epsilon = 0.,
+        num_latents = None   # setting this would enable perceiver-like cross attention from latents to sequence, with the latents derived from VNWeightedPool
     ):
         super().__init__()
         self.scale = (dim_coor * dim_head) ** -0.5
         dim_inner = dim_head * heads
         self.heads = heads
 
-        self.to_qkv = VNLinear(dim, dim_inner * 3, bias_epsilon = bias_epsilon)
+        self.to_q_input = None
+        if exists(num_latents):
+            self.to_q_input = VNWeightedPool(dim, num_pooled_tokens = num_latents, squeeze_out_pooled_dim = False)
+
+        self.to_q = VNLinear(dim, dim_inner, bias_epsilon = bias_epsilon)
+        self.to_kv = VNLinear(dim, dim_inner * 2, bias_epsilon = bias_epsilon)
         self.to_out = VNLinear(dim_inner, dim, bias_epsilon = bias_epsilon)
 
     def forward(self, x, mask = None):
@@ -111,7 +117,9 @@ class VNAttention(nn.Module):
 
         c = x.shape[-1]
 
-        q, k, v = self.to_qkv(x).chunk(3, dim = -2)
+        q_input = self.to_q_input(x) if exists(self.to_q_input) else x
+
+        q, k, v = (self.to_q(q_input), *self.to_kv(x).chunk(2, dim = -2))
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) c -> b h n d c', h = self.heads), (q, k, v))
 
         q = q * self.scale
