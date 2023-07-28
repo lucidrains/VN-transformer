@@ -13,6 +13,17 @@ def exists(val):
 def inner_dot_product(x, y, *, dim = -1, keepdim = True):
     return (x * y).sum(dim = dim, keepdim = keepdim)
 
+# layernorm
+
+class LayerNorm(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.ones(dim))
+        self.register_buffer('beta', torch.zeros(dim))
+
+    def forward(self, x):
+        return F.layer_norm(x, x.shape[-1:], self.gamma, self.beta)
+
 # equivariant modules
 
 class VNLinear(nn.Module):
@@ -50,6 +61,18 @@ class VNRelu(nn.Module):
 
         return out
 
+class VNLayerNorm(nn.Module):
+    def __init__(self, dim, eps = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.ln = LayerNorm(dim)
+
+    def forward(self, x):
+        norms = x.norm(dim = -1)
+        x = x / rearrange(norms.clamp(min = self.eps), '... -> ... 1')
+        ln_out = self.ln(norms)
+        return x * rearrange(ln_out, '... -> ... 1')
+
 # main class
 
 class VNTransformer(nn.Module):
@@ -70,6 +93,7 @@ class VNTransformer(nn.Module):
 
         if reduce_dim_out:
             self.vn_proj_out = nn.Sequential(
+                VNLayerNorm(dim),
                 VNLinear(dim, 1),
                 Rearrange('... 1 c -> ... c')
             )
