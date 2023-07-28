@@ -83,15 +83,16 @@ class VNAttention(nn.Module):
         dim,
         dim_head = 64,
         heads = 8,
-        dim_coor = 3
+        dim_coor = 3,
+        bias_epsilon = 0.
     ):
         super().__init__()
         self.scale = (dim_coor * dim_head) ** -0.5
         dim_inner = dim_head * heads
         self.heads = heads
 
-        self.to_qkv = VNLinear(dim, dim_inner * 3)
-        self.to_out = VNLinear(dim_inner, dim)
+        self.to_qkv = VNLinear(dim, dim_inner * 3, bias_epsilon = bias_epsilon)
+        self.to_out = VNLinear(dim_inner, dim, bias_epsilon = bias_epsilon)
 
     def forward(self, x):
         """
@@ -121,6 +122,14 @@ class VNAttention(nn.Module):
         out = rearrange(out, 'b h n d c -> b n (h d) c')
         return self.to_out(out)
 
+def VNFeedForward(dim, mult = 4, bias_epsilon = 0.):
+    dim_inner = int(dim * mult)
+    return nn.Sequential(
+        VNLinear(dim, dim_inner, bias_epsilon = bias_epsilon),
+        VNReLU(dim_inner),
+        VNLinear(dim_inner, dim, bias_epsilon = bias_epsilon)
+    )
+
 class VNLayerNorm(nn.Module):
     def __init__(self, dim, eps = 1e-6):
         super().__init__()
@@ -133,18 +142,65 @@ class VNLayerNorm(nn.Module):
         ln_out = self.ln(norms)
         return x * rearrange(ln_out, '... -> ... 1')
 
+# equivariant VN transformer encoder
+
+class VNTransformerEncoder(nn.Module):
+    def __init__(
+        self,
+        dim,
+        *,
+        depth,
+        dim_head = 64,
+        heads = 8,
+        dim_coor = 3,
+        ff_mult = 4,
+        final_norm = False,
+        bias_epsilon = 0.
+    ):
+        super().__init__()
+        self.dim = dim
+        self.dim_coor = dim_coor
+
+        self.layers = nn.ModuleList([])
+
+        for _ in range(depth):
+            self.layers.append(nn.ModuleList([
+                VNAttention(dim = dim, dim_head = dim_head, heads = heads, bias_epsilon = bias_epsilon),
+                VNLayerNorm(dim),
+                VNFeedForward(dim = dim, mult = ff_mult, bias_epsilon = bias_epsilon),
+                VNLayerNorm(dim)
+            ]))
+
+        self.norm = VNLayerNorm(dim) if final_norm else nn.Identity()
+
+    def forward(
+        self,
+        x,
+        mask = None
+    ):
+        *_, d, c = x.shape
+
+        assert x.ndim == 4 and d == self.dim and c == self.dim_coor, 'input needs to be in the shape of (batch, seq, dim ({self.dim}), coordinate dim ({self.dim_coor}))'
+
+        for attn, attn_post_ln, ff, ff_post_ln in self.layers:
+            x = attn_post_ln(attn(x)) + x
+            x = ff_post_ln(ff(x)) + x
+
+        return self.norm(x)
+
 # invariant layers
 
 class VNInvariant(nn.Module):
     def __init__(
         self,
         dim,
-        dim_coors = 3
+        dim_coor = 3,
+
     ):
         super().__init__()
         self.mlp = nn.Sequential(
-            VNLinear(dim, dim_coors),
-            VNReLU(dim_coors),
+            VNLinear(dim, dim_coor),
+            VNReLU(dim_coor),
             Rearrange('... d e -> ... e d')
         )
 
@@ -158,22 +214,31 @@ class VNTransformer(nn.Module):
         self,
         *,
         dim,
-        reduce_dim_out = True
+        depth,
+        dim_head = 64,
+        heads = 8,
+        reduce_dim_out = True,
+        bias_epsilon = 0.
     ):
         super().__init__()
 
         self.vn_proj_in = nn.Sequential(
             Rearrange('... c -> ... 1 c'),
-            VNLinear(1, dim)
+            VNLinear(1, dim, bias_epsilon = bias_epsilon)
         )
 
-        self.act = VNReLU(dim)
-        self.attn = VNAttention(dim)
+        self.encoder = VNTransformerEncoder(
+            dim = dim,
+            depth = depth,
+            dim_head = dim_head,
+            heads = heads,
+            bias_epsilon = bias_epsilon
+        )
 
         if reduce_dim_out:
             self.vn_proj_out = nn.Sequential(
                 VNLayerNorm(dim),
-                VNLinear(dim, 1),
+                VNLinear(dim, 1, bias_epsilon = bias_epsilon),
                 Rearrange('... 1 c -> ... c')
             )
         else:
@@ -186,7 +251,6 @@ class VNTransformer(nn.Module):
         mask = None
     ):
         coors = self.vn_proj_in(coors)
-        coors = self.act(coors)
-        coors = self.attn(coors)
+        coors = self.encoder(coors)
         coors = self.vn_proj_out(coors)
         return feats, coors

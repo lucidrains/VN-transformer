@@ -4,6 +4,39 @@ A <a href="https://arxiv.org/abs/2206.04176">Transformer made of Rotation-equiva
 
 <a href="https://openreview.net/forum?id=EiX2L4sDPG">Open Review</a>
 
+## Install
+
+```bash
+$ pip install VN-transformer
+```
+
+## Usage
+
+```python
+import torch
+from VN_transformer import VNTransformer
+
+model = VNTransformer(
+    dim = 64,
+    depth = 2,
+    dim_head = 64,
+    heads = 8
+)
+
+feats = torch.randn(1, 32, 64)
+coors = torch.randn(1, 32, 3)
+
+feats, coors = model(feats, coors)
+```
+
+## Tests
+
+Confidence in equivariance
+
+```bash
+$ python setup.py test
+```
+
 ## Citations
 
 ```bibtex

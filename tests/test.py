@@ -24,7 +24,10 @@ def test_vn_invariant():
 def test_equivariance():
 
     model = VNTransformer(
-        dim = 64
+        dim = 64,
+        depth = 2,
+        dim_head = 64,
+        heads = 8
     )
 
     feats = torch.randn(1, 32, 64)
