@@ -94,7 +94,7 @@ class VNAttention(nn.Module):
         self.to_qkv = VNLinear(dim, dim_inner * 3, bias_epsilon = bias_epsilon)
         self.to_out = VNLinear(dim_inner, dim, bias_epsilon = bias_epsilon)
 
-    def forward(self, x):
+    def forward(self, x, mask = None):
         """
         einstein notation
         b - batch
@@ -114,6 +114,10 @@ class VNAttention(nn.Module):
         q = q * self.scale
 
         sim = einsum('b h i d c, b h j d c -> b h i j', q, k)
+
+        if exists(mask):
+            mask = rearrange(mask, 'b j -> b 1 1 j')
+            sim = sim.masked_fill(~mask, -torch.finfo(sim.dtype).max)
 
         attn = sim.softmax(dim = -1)
 
@@ -183,7 +187,7 @@ class VNTransformerEncoder(nn.Module):
         assert x.ndim == 4 and d == self.dim and c == self.dim_coor, 'input needs to be in the shape of (batch, seq, dim ({self.dim}), coordinate dim ({self.dim_coor}))'
 
         for attn, attn_post_ln, ff, ff_post_ln in self.layers:
-            x = attn_post_ln(attn(x)) + x
+            x = attn_post_ln(attn(x, mask = mask)) + x
             x = ff_post_ln(ff(x)) + x
 
         return self.norm(x)
@@ -251,6 +255,6 @@ class VNTransformer(nn.Module):
         mask = None
     ):
         coors = self.vn_proj_in(coors)
-        coors = self.encoder(coors)
+        coors = self.encoder(coors, mask = mask)
         coors = self.vn_proj_out(coors)
         return feats, coors
