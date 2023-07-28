@@ -4,5 +4,6 @@ from VN_transformer.VN_transformer import (
     VNLayerNorm,
     VNFeedForward,
     VNAttention,
-    VNTransformerEncoder
+    VNTransformerEncoder,
+    VNInvariant
 )
