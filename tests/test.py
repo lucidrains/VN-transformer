@@ -4,6 +4,8 @@ import torch
 from VN_transformer.VN_transformer import VNTransformer
 from VN_transformer.rotations import rot
 
+torch.set_default_dtype(torch.float64)
+
 # test equivariance
 
 def test_equivariance():
@@ -20,4 +22,4 @@ def test_equivariance():
     _, out1 = model(feats, coors @ R, mask)
     out2 = model(feats, coors, mask)[1] @ R
 
-    assert torch.allclose(out1, out2, atol = 1e-4), 'is not equivariant'
+    assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'

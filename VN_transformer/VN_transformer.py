@@ -10,6 +10,9 @@ from einops.layers.torch import Rearrange
 def exists(val):
     return val is not None
 
+def inner_dot_product(x, y, *, dim = -1, keepdim = True):
+    return (x * y).sum(dim = dim, keepdim = keepdim)
+
 # equivariant modules
 
 class VNLinear(nn.Module):
@@ -23,6 +26,29 @@ class VNLinear(nn.Module):
 
     def forward(self, x):
         return einsum('... i c, o i -> ... o c', x, self.weight)
+
+class VNRelu(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.W = nn.Parameter(torch.randn(dim, dim))
+        self.U = nn.Parameter(torch.randn(dim, dim))
+
+    def forward(self, x):
+        q = einsum('... i c, o i -> ... o c', x, self.W)
+        k = einsum('... i c, o i -> ... o c', x, self.U)
+
+        qk = inner_dot_product(q, k)
+
+        normed_k = F.normalize(k, dim = -1)
+        q_projected_on_k = q - inner_dot_product(q, normed_k) * normed_k
+
+        out = torch.where(
+            qk >= 0.,
+            q,
+            q_projected_on_k
+        )
+
+        return out
 
 # main class
 
@@ -40,6 +66,8 @@ class VNTransformer(nn.Module):
             VNLinear(1, dim)
         )
 
+        self.act = VNRelu(dim)
+
         if reduce_dim_out:
             self.vn_proj_out = nn.Sequential(
                 VNLinear(dim, 1),
@@ -55,6 +83,6 @@ class VNTransformer(nn.Module):
         mask = None
     ):
         coors = self.vn_proj_in(coors)
-
+        coors = self.act(coors)
         coors = self.vn_proj_out(coors)
         return feats, coors

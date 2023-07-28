@@ -13,3 +13,14 @@ A <a href="https://arxiv.org/abs/2206.04176">Transformer made of Rotation-equiva
     year    = {2022}
 }
 ```
+
+```bibtex
+@article{Deng2021VectorNA,
+    title   = {Vector Neurons: A General Framework for SO(3)-Equivariant Networks},
+    author  = {Congyue Deng and Or Litany and Yueqi Duan and Adrien Poulenard and Andrea Tagliasacchi and Leonidas J. Guibas},
+    journal = {2021 IEEE/CVF International Conference on Computer Vision (ICCV)},
+    year    = {2021},
+    pages   = {12180-12189},
+    url     = {https://api.semanticscholar.org/CorpusID:233394028}
+}
+```
