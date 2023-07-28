@@ -38,9 +38,10 @@ class VNLinear(nn.Module):
     def forward(self, x):
         return einsum('... i c, o i -> ... o c', x, self.weight)
 
-class VNRelu(nn.Module):
-    def __init__(self, dim):
+class VNReLU(nn.Module):
+    def __init__(self, dim, eps = 1e-6):
         super().__init__()
+        self.eps = eps
         self.W = nn.Parameter(torch.randn(dim, dim))
         self.U = nn.Parameter(torch.randn(dim, dim))
 
@@ -50,8 +51,8 @@ class VNRelu(nn.Module):
 
         qk = inner_dot_product(q, k)
 
-        normed_k = F.normalize(k, dim = -1)
-        q_projected_on_k = q - inner_dot_product(q, normed_k) * normed_k
+        k_norm = k.norm(dim = -1, keepdim = True).clamp(min = self.eps)
+        q_projected_on_k = q - inner_dot_product(q, k / k_norm) * k
 
         out = torch.where(
             qk >= 0.,
@@ -60,6 +61,50 @@ class VNRelu(nn.Module):
         )
 
         return out
+
+class VNAttention(nn.Module):
+    def __init__(
+        self,
+        dim,
+        dim_head = 64,
+        heads = 8,
+        dim_coor = 3
+    ):
+        super().__init__()
+        self.scale = (dim_coor * dim_head) ** -0.5
+        dim_inner = dim_head * heads
+        self.heads = heads
+
+        self.to_qkv = VNLinear(dim, dim_inner * 3)
+        self.to_out = VNLinear(dim_inner, dim)
+
+    def forward(self, x):
+        """
+        einstein notation
+        b - batch
+        n - sequence
+        h - heads
+        d - feature dimension (channels)
+        c - coordinate dimension (3 for 3d space)
+        i - source sequence dimension
+        j - target sequence dimension
+        """
+
+        c = x.shape[-1]
+
+        q, k, v = self.to_qkv(x).chunk(3, dim = -2)
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) c -> b h n d c', h = self.heads), (q, k, v))
+
+        q = q * self.scale
+
+        sim = einsum('b h i d c, b h j d c -> b h i j', q, k)
+
+        attn = sim.softmax(dim = -1)
+
+        out = einsum('b h i j, b h j d c -> b h i d c', attn, v)
+
+        out = rearrange(out, 'b h n d c -> b n (h d) c')
+        return self.to_out(out)
 
 class VNLayerNorm(nn.Module):
     def __init__(self, dim, eps = 1e-6):
@@ -89,7 +134,8 @@ class VNTransformer(nn.Module):
             VNLinear(1, dim)
         )
 
-        self.act = VNRelu(dim)
+        self.act = VNReLU(dim)
+        self.attn = VNAttention(dim)
 
         if reduce_dim_out:
             self.vn_proj_out = nn.Sequential(
@@ -108,5 +154,6 @@ class VNTransformer(nn.Module):
     ):
         coors = self.vn_proj_in(coors)
         coors = self.act(coors)
+        coors = self.attn(coors)
         coors = self.vn_proj_out(coors)
         return feats, coors
