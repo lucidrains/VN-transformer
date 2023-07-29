@@ -43,8 +43,8 @@ $ python setup.py test
 
 ## Todo
 
-- [ ] complete the perceiver like feature aggregation
-- [ ] offer both early and late fusion within `VNTransformer`
+- [x] complete the perceiver like feature aggregation
+- [x] offer early fusion within `VNTransformer` with setting of `dim_feat`
 - [ ] see if it is straightforward to make translation in/equivariant
     - [ ] test on protein backbone denoising if above could be done
 
