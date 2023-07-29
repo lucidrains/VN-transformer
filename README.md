@@ -1,6 +1,6 @@
 <img src="./vn-transformer.png" width="300px"></img>
 
-## VN (Vector Neuron) Transformer (wip)
+## VN (Vector Neuron) Transformer
 
 A <a href="https://arxiv.org/abs/2206.04176">Transformer made of Rotation-equivariant Attention</a> using <a href="https://arxiv.org/abs/2104.12229">Vector Neurons</a>
 
@@ -23,6 +23,7 @@ model = VNTransformer(
     depth = 2,
     dim_head = 64,
     heads = 8,
+    dim_feat = 64,       # will default to early fusion, since this was the best performing
     beta_epsilon = 1e-6  # in this paper, they propose breaking equivariance with a tiny bit of bias noise in the VN linear. they claim this leads to improved stability. setting this to 0 would turn off the epsilon approximate equivariance
 )
 

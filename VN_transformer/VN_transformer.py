@@ -252,12 +252,17 @@ class VNTransformer(nn.Module):
         *,
         dim,
         depth,
+        dim_feat = None,
         dim_head = 64,
         heads = 8,
+        dim_coor = 3,
         reduce_dim_out = True,
         bias_epsilon = 0.
     ):
         super().__init__()
+        dim_feat = default(dim_feat, 0)
+        self.dim_feat = dim_feat
+        self.dim_coor_total = dim_coor + dim_feat
 
         self.vn_proj_in = nn.Sequential(
             Rearrange('... c -> ... 1 c'),
@@ -269,7 +274,8 @@ class VNTransformer(nn.Module):
             depth = depth,
             dim_head = dim_head,
             heads = heads,
-            bias_epsilon = bias_epsilon
+            bias_epsilon = bias_epsilon,
+            dim_coor = self.dim_coor_total
         )
 
         if reduce_dim_out:
@@ -283,10 +289,18 @@ class VNTransformer(nn.Module):
 
     def forward(
         self,
-        feats,
         coors,
+        *,
+        feats = None,
         mask = None
     ):
+        if exists(feats):
+            assert feats.ndim == 3
+            assert feats.shape[-1] == self.dim_feat, f'dim_feat should be set to {feats.shape[-1]}'
+            coors = torch.cat((coors, feats), dim = -1)
+
+        assert coors.shape[-1] == self.dim_coor_total
+
         coors = self.vn_proj_in(coors)
         coors = self.encoder(coors, mask = mask)
         coors = self.vn_proj_out(coors)
