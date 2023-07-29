@@ -34,8 +34,8 @@ def test_equivariance():
     mask  = torch.ones(1, 32).bool()
 
     R   = rot(*torch.randn(3))
-    _, out1 = model(coors @ R, mask = mask)
-    out2 = model(coors, mask = mask)[1] @ R
+    out1 = model(coors @ R, mask = mask)
+    out2 = model(coors, mask = mask) @ R
 
     assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'
 
@@ -56,10 +56,10 @@ def test_equivariance_with_early_fusion():
     mask  = torch.ones(1, 32).bool()
 
     R   = rot(*torch.randn(3))
-    _, out1 = model(coors @ R, feats = feats, mask = mask)
+    out1 = model(coors @ R, feats = feats, mask = mask)
     out1 = out1[..., :3]
 
-    out2 = model(coors, feats = feats, mask = mask)[1]
+    out2 = model(coors, feats = feats, mask = mask)
     out2 = out2[..., :3] @ R
 
     assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'
