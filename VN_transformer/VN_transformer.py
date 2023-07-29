@@ -304,4 +304,4 @@ class VNTransformer(nn.Module):
         coors = self.vn_proj_in(coors)
         coors = self.encoder(coors, mask = mask)
         coors = self.vn_proj_out(coors)
-        return feats, coors
+        return coors
