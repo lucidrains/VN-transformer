@@ -6,6 +6,10 @@ A <a href="https://arxiv.org/abs/2206.04176">Transformer made of Rotation-equiva
 
 <a href="https://openreview.net/forum?id=EiX2L4sDPG">Open Review</a>
 
+## Appreciation
+
+- <a href="https://stability.ai/">StabilityAI</a> for the generous sponsorship, as well as my other sponsors, for affording me the independence to open source artificial intelligence.
+
 ## Install
 
 ```bash
