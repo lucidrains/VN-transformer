@@ -1,7 +1,7 @@
 import pytest
 
 import torch
-from VN_transformer.VN_transformer import VNTransformer, VNInvariant
+from VN_transformer.VN_transformer import VNTransformer, VNInvariant, VNAttention
 from VN_transformer.rotations import rot
 
 torch.set_default_dtype(torch.float64)
@@ -39,7 +39,28 @@ def test_equivariance():
 
     assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'
 
-# # test equivariance
+# test vn perceiver attention equivariance
+
+def test_perceiver_vn_attention_equivariance():
+
+    model = VNAttention(
+        dim = 64,
+        dim_head = 64,
+        heads = 8,
+        num_latents = 2
+    )
+
+    coors = torch.randn(1, 32, 64, 3)
+    mask  = torch.ones(1, 32).bool()
+
+    R   = rot(*torch.randn(3))
+    out1 = model(coors @ R, mask = mask)
+    out2 = model(coors, mask = mask) @ R
+
+    assert out1.shape[1] == 2
+    assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'
+
+# test early fusion equivariance
 
 def test_equivariance_with_early_fusion():
 

@@ -117,7 +117,10 @@ class VNAttention(nn.Module):
 
         c = x.shape[-1]
 
-        q_input = self.to_q_input(x) if exists(self.to_q_input) else x
+        if exists(self.to_q_input):
+            q_input = self.to_q_input(x, mask = mask)
+        else:
+            q_input = x
 
         q, k, v = (self.to_q(q_input), *self.to_kv(x).chunk(2, dim = -2))
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) c -> b h n d c', h = self.heads), (q, k, v))
@@ -170,8 +173,17 @@ class VNWeightedPool(nn.Module):
         self.weight = nn.Parameter(torch.randn(num_pooled_tokens, dim, dim_out))
         self.squeeze_out_pooled_dim = num_pooled_tokens == 1 and squeeze_out_pooled_dim
 
-    def forward(self, x):
-        out = einsum('b n d c, m d e -> b m e c', x, self.weight)
+    def forward(self, x, mask = None):
+        if exists(mask):
+            mask = rearrange(mask, 'b n -> b n 1 1')
+            x = x.masked_fill(~mask, 0.)
+            numer = reduce(x, 'b n d c -> b d c', 'sum')
+            denom = mask.sum(dim = 1)
+            mean_pooled = numer / denom.clamp(min = 1e-6)
+        else:
+            mean_pooled = reduce(x, 'b n d c -> b d c', 'mean')
+
+        out = einsum('b d c, m d e -> b m e c', mean_pooled, self.weight)
 
         if not self.squeeze_out_pooled_dim:
             return out
