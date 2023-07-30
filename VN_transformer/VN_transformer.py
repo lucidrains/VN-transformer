@@ -88,6 +88,7 @@ class VNAttention(nn.Module):
         heads = 8,
         dim_coor = 3,
         bias_epsilon = 0.,
+        l2_dist_attn = False,
         num_latents = None   # setting this would enable perceiver-like cross attention from latents to sequence, with the latents derived from VNWeightedPool
     ):
         super().__init__()
@@ -102,6 +103,12 @@ class VNAttention(nn.Module):
         self.to_q = VNLinear(dim, dim_inner, bias_epsilon = bias_epsilon)
         self.to_kv = VNLinear(dim, dim_inner * 2, bias_epsilon = bias_epsilon)
         self.to_out = VNLinear(dim_inner, dim, bias_epsilon = bias_epsilon)
+
+        self.l2_dist_attn = l2_dist_attn
+
+        # use l2 distance squared for attention
+        # this was used in the invariant point attention in alphafold2, vitgan, gigagan, and also analyzed in depth https://arxiv.org/abs/2006.04710
+        # have also tested this in equiformer variant https://github.com/lucidrains/equiformer-pytorch, where i found it to converge much nicer given the fit with spatial coordinates
 
     def forward(self, x, mask = None):
         """
@@ -125,13 +132,20 @@ class VNAttention(nn.Module):
         q, k, v = (self.to_q(q_input), *self.to_kv(x).chunk(2, dim = -2))
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) c -> b h n d c', h = self.heads), (q, k, v))
 
-        q = q * self.scale
-
         sim = einsum('b h i d c, b h j d c -> b h i j', q, k)
+
+        if self.l2_dist_attn:
+            # -cdist squared == (-q^2 + 2qk - k^2)
+            # so simply work off the qk above
+            q_squared = reduce(q ** 2, 'b h i d c -> b h i 1', 'sum')
+            k_squared = reduce(k ** 2, 'b h j d c -> b h 1 j', 'sum')
+            sim = sim * 2 - q_squared - k_squared
 
         if exists(mask):
             mask = rearrange(mask, 'b j -> b 1 1 j')
             sim = sim.masked_fill(~mask, -torch.finfo(sim.dtype).max)
+
+        sim = sim * self.scale
 
         attn = sim.softmax(dim = -1)
 
@@ -204,7 +218,8 @@ class VNTransformerEncoder(nn.Module):
         dim_coor = 3,
         ff_mult = 4,
         final_norm = False,
-        bias_epsilon = 0.
+        bias_epsilon = 0.,
+        l2_dist_attn = False
     ):
         super().__init__()
         self.dim = dim
@@ -214,7 +229,7 @@ class VNTransformerEncoder(nn.Module):
 
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                VNAttention(dim = dim, dim_head = dim_head, heads = heads, bias_epsilon = bias_epsilon),
+                VNAttention(dim = dim, dim_head = dim_head, heads = heads, bias_epsilon = bias_epsilon, l2_dist_attn = l2_dist_attn),
                 VNLayerNorm(dim),
                 VNFeedForward(dim = dim, mult = ff_mult, bias_epsilon = bias_epsilon),
                 VNLayerNorm(dim)
@@ -269,7 +284,8 @@ class VNTransformer(nn.Module):
         heads = 8,
         dim_coor = 3,
         reduce_dim_out = True,
-        bias_epsilon = 0.
+        bias_epsilon = 0.,
+        l2_dist_attn = True
     ):
         super().__init__()
         dim_feat = default(dim_feat, 0)
@@ -287,7 +303,8 @@ class VNTransformer(nn.Module):
             dim_head = dim_head,
             heads = heads,
             bias_epsilon = bias_epsilon,
-            dim_coor = self.dim_coor_total
+            dim_coor = self.dim_coor_total ,
+            l2_dist_attn = l2_dist_attn
         )
 
         if reduce_dim_out:

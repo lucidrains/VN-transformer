@@ -21,13 +21,15 @@ def test_vn_invariant():
 
 # test equivariance
 
-def test_equivariance():
+@pytest.mark.parametrize('l2_dist_attn', [True, False])
+def test_equivariance(l2_dist_attn):
 
     model = VNTransformer(
         dim = 64,
         depth = 2,
         dim_head = 64,
-        heads = 8
+        heads = 8,
+        l2_dist_attn = l2_dist_attn
     )
 
     coors = torch.randn(1, 32, 3)
@@ -41,13 +43,15 @@ def test_equivariance():
 
 # test vn perceiver attention equivariance
 
-def test_perceiver_vn_attention_equivariance():
+@pytest.mark.parametrize('l2_dist_attn', [True, False])
+def test_perceiver_vn_attention_equivariance(l2_dist_attn):
 
     model = VNAttention(
         dim = 64,
         dim_head = 64,
         heads = 8,
-        num_latents = 2
+        num_latents = 2,
+        l2_dist_attn = l2_dist_attn
     )
 
     coors = torch.randn(1, 32, 64, 3)
@@ -62,14 +66,16 @@ def test_perceiver_vn_attention_equivariance():
 
 # test early fusion equivariance
 
-def test_equivariance_with_early_fusion():
+@pytest.mark.parametrize('l2_dist_attn', [True, False])
+def test_equivariance_with_early_fusion(l2_dist_attn):
 
     model = VNTransformer(
         dim = 64,
         depth = 2,
         dim_head = 64,
         heads = 8,
-        dim_feat = 64
+        dim_feat = 64,
+        l2_dist_attn = l2_dist_attn
     )
 
     feats = torch.randn(1, 32, 64)
