@@ -83,10 +83,9 @@ def test_equivariance_with_early_fusion(l2_dist_attn):
     mask  = torch.ones(1, 32).bool()
 
     R   = rot(*torch.randn(3))
-    out1 = model(coors @ R, feats = feats, mask = mask)
-    out1 = out1[..., :3]
+    out1, _ = model(coors @ R, feats = feats, mask = mask, return_concatted_coors_and_feats = False)
 
-    out2 = model(coors, feats = feats, mask = mask)
-    out2 = out2[..., :3] @ R
+    out2, _ = model(coors, feats = feats, mask = mask, return_concatted_coors_and_feats = False)
+    out2 = out2 @ R
 
     assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'

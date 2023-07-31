@@ -303,7 +303,7 @@ class VNTransformer(nn.Module):
             dim_head = dim_head,
             heads = heads,
             bias_epsilon = bias_epsilon,
-            dim_coor = self.dim_coor_total ,
+            dim_coor = self.dim_coor_total,
             l2_dist_attn = l2_dist_attn
         )
 
@@ -321,16 +321,24 @@ class VNTransformer(nn.Module):
         coors,
         *,
         feats = None,
-        mask = None
+        mask = None,
+        return_concatted_coors_and_feats = False
     ):
+        x = coors
+
         if exists(feats):
             assert feats.ndim == 3
             assert feats.shape[-1] == self.dim_feat, f'dim_feat should be set to {feats.shape[-1]}'
-            coors = torch.cat((coors, feats), dim = -1)
+            x = torch.cat((x, feats), dim = -1)
 
-        assert coors.shape[-1] == self.dim_coor_total
+        assert x.shape[-1] == self.dim_coor_total
 
-        coors = self.vn_proj_in(coors)
-        coors = self.encoder(coors, mask = mask)
-        coors = self.vn_proj_out(coors)
-        return coors
+        x = self.vn_proj_in(x)
+        x = self.encoder(x, mask = mask)
+        x = self.vn_proj_out(x)
+
+        if return_concatted_coors_and_feats or not exists(feats):
+            return x
+
+        coors, feats = x[..., :3], x[..., 3:]
+        return coors, feats
