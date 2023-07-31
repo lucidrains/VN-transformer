@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'VN-transformer',
   packages = find_packages(exclude=[]),
-  version = '0.0.14',
+  version = '0.0.15',
   license='MIT',
   description = 'Vector Neuron Transformer (VN-Transformer)',
   author = 'Phil Wang',

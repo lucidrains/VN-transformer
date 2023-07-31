@@ -279,6 +279,7 @@ class VNTransformer(nn.Module):
         *,
         dim,
         depth,
+        num_tokens = None,
         dim_feat = None,
         dim_head = 64,
         heads = 8,
@@ -290,6 +291,8 @@ class VNTransformer(nn.Module):
         translation_invariant = False
     ):
         super().__init__()
+        self.token_emb = nn.Embedding(num_tokens, dim) if exists(num_tokens) else None
+
         dim_feat = default(dim_feat, 0)
         self.dim_feat = dim_feat
         self.dim_coor_total = dim_coor + dim_feat
@@ -337,7 +340,10 @@ class VNTransformer(nn.Module):
         x = coors
 
         if exists(feats):
-            assert feats.ndim == 3
+            if feats.dtype == torch.long:
+                assert exists(self.token_emb), 'num_tokens must be given to the VNTransformer (to build the Embedding), if the features are to be given as indices'
+                feats = self.token_emb(feats)
+
             assert feats.shape[-1] == self.dim_feat, f'dim_feat should be set to {feats.shape[-1]}'
             x = torch.cat((x, feats), dim = -1)
 
