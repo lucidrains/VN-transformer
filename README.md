@@ -45,13 +45,21 @@ Confidence in equivariance
 $ python setup.py test
 ```
 
-## Todo
+## Example
 
-- [x] complete the perceiver like feature aggregation
-- [x] offer early fusion within `VNTransformer` with setting of `dim_feat`
-- [x] see if it is straightforward to make translation in/equivariant
-- [ ] figure out what to do for se(3) if translation is done after rotation
-- [ ] test on protein backbone denoising if above could be done
+First install `sidechainnet`
+
+```bash
+$ pip install sidechainnet
+```
+
+Then run the protein backbone denoising task
+
+```bash
+$ python denoise.py
+```
+
+It does not perform as well as <a href="https://github.com/lucidrains/En-transformer">En-Transformer</a>, nor <a href="https://github.com/lucidrains/equiformer-pytorch">Equiformer</a>
 
 ## Citations
 
