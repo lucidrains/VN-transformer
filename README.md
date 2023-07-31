@@ -49,8 +49,9 @@ $ python setup.py test
 
 - [x] complete the perceiver like feature aggregation
 - [x] offer early fusion within `VNTransformer` with setting of `dim_feat`
-- [ ] see if it is straightforward to make translation in/equivariant
-    - [ ] test on protein backbone denoising if above could be done
+- [x] see if it is straightforward to make translation in/equivariant
+- [ ] figure out what to do for se(3) if translation is done after rotation
+- [ ] test on protein backbone denoising if above could be done
 
 ## Citations
 

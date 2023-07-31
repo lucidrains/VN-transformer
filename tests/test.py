@@ -64,7 +64,7 @@ def test_perceiver_vn_attention_equivariance(l2_dist_attn):
     assert out1.shape[1] == 2
     assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'
 
-# test early fusion equivariance
+# test SO(3) early fusion equivariance
 
 @pytest.mark.parametrize('l2_dist_attn', [True, False])
 def test_equivariance_with_early_fusion(l2_dist_attn):
@@ -87,5 +87,33 @@ def test_equivariance_with_early_fusion(l2_dist_attn):
 
     out2, _ = model(coors, feats = feats, mask = mask, return_concatted_coors_and_feats = False)
     out2 = out2 @ R
+
+    assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'
+
+# test SE(3) early fusion equivariance
+
+@pytest.mark.parametrize('l2_dist_attn', [True, False])
+def test_se3_equivariance_with_early_fusion(l2_dist_attn):
+
+    model = VNTransformer(
+        dim = 64,
+        depth = 2,
+        dim_head = 64,
+        heads = 8,
+        dim_feat = 64,
+        translation_equivariance = True,
+        l2_dist_attn = l2_dist_attn
+    )
+
+    feats = torch.randn(1, 32, 64)
+    coors = torch.randn(1, 32, 3)
+    mask  = torch.ones(1, 32).bool()
+
+    T   = torch.randn(3)
+    R   = rot(*torch.randn(3))
+    out1, _ = model((coors + T) @ R, feats = feats, mask = mask, return_concatted_coors_and_feats = False)
+
+    out2, _ = model(coors, feats = feats, mask = mask, return_concatted_coors_and_feats = False)
+    out2 = (out2 + T) @ R
 
     assert torch.allclose(out1, out2, atol = 1e-6), 'is not equivariant'

@@ -285,12 +285,18 @@ class VNTransformer(nn.Module):
         dim_coor = 3,
         reduce_dim_out = True,
         bias_epsilon = 0.,
-        l2_dist_attn = True
+        l2_dist_attn = True,
+        translation_equivariance = False,
+        translation_invariant = False
     ):
         super().__init__()
         dim_feat = default(dim_feat, 0)
         self.dim_feat = dim_feat
         self.dim_coor_total = dim_coor + dim_feat
+
+        assert (int(translation_equivariance) + int(translation_invariant)) <= 1
+        self.translation_equivariance = translation_equivariance
+        self.translation_invariant = translation_invariant
 
         self.vn_proj_in = nn.Sequential(
             Rearrange('... c -> ... 1 c'),
@@ -324,6 +330,10 @@ class VNTransformer(nn.Module):
         mask = None,
         return_concatted_coors_and_feats = False
     ):
+        if self.translation_equivariance or self.translation_invariant:
+            coors_mean = reduce(coors, '... c -> c', 'mean')
+            coors = coors - coors_mean
+
         x = coors
 
         if exists(feats):
@@ -337,8 +347,15 @@ class VNTransformer(nn.Module):
         x = self.encoder(x, mask = mask)
         x = self.vn_proj_out(x)
 
-        if return_concatted_coors_and_feats or not exists(feats):
-            return x
+        coors_out, feats_out = x[..., :3], x[..., 3:]
 
-        coors, feats = x[..., :3], x[..., 3:]
-        return coors, feats
+        if self.translation_equivariance:
+            coors_out = coors_out + coors_mean
+
+        if not exists(feats):
+            return coors_out
+
+        if return_concatted_coors_and_feats:
+            return torch.cat((coors_out, feats_out), dim = -1)
+
+        return coors_out, feats_out
