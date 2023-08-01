@@ -106,8 +106,13 @@ class VNAttention(nn.Module):
             self.to_q_input = VNWeightedPool(dim, num_pooled_tokens = num_latents, squeeze_out_pooled_dim = False)
 
         self.to_q = VNLinear(dim, dim_inner, bias_epsilon = bias_epsilon)
-        self.to_kv = VNLinear(dim, dim_inner * 2, bias_epsilon = bias_epsilon)
+        self.to_k = VNLinear(dim, dim_inner, bias_epsilon = bias_epsilon)
+        self.to_v = VNLinear(dim, dim_inner, bias_epsilon = bias_epsilon)
         self.to_out = VNLinear(dim_inner, dim, bias_epsilon = bias_epsilon)
+
+        if l2_dist_attn and not exists(num_latents):
+            # tied queries and keys for l2 distance attention, and not perceiver-like attention
+            self.to_k = self.to_q
 
         self.attend = Attend(flash = flash, l2_dist = l2_dist_attn)
 
@@ -130,7 +135,7 @@ class VNAttention(nn.Module):
         else:
             q_input = x
 
-        q, k, v = (self.to_q(q_input), *self.to_kv(x).chunk(2, dim = -2))
+        q, k, v = self.to_q(q_input), self.to_k(x), self.to_v(x)
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) c -> b h n (d c)', h = self.heads), (q, k, v))
 
         out = self.attend(q, k, v, mask = mask)

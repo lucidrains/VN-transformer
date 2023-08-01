@@ -29,7 +29,8 @@ transformer = VNTransformer(
     heads = 8,
     dim_feat = 64,
     bias_epsilon = 1e-6,
-    flash_attn = True
+    l2_dist_attn = True,
+    flash_attn = False
 ).cuda()
 
 data = scn.load(
