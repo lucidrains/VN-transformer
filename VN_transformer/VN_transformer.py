@@ -5,6 +5,8 @@ from torch import nn, einsum, Tensor
 from einops import rearrange, repeat, reduce
 from einops.layers.torch import Rearrange, Reduce
 
+from VN_transformer.attend import Attend
+
 # helper
 
 def exists(val):
@@ -89,9 +91,12 @@ class VNAttention(nn.Module):
         dim_coor = 3,
         bias_epsilon = 0.,
         l2_dist_attn = False,
+        flash = False,
         num_latents = None   # setting this would enable perceiver-like cross attention from latents to sequence, with the latents derived from VNWeightedPool
     ):
         super().__init__()
+        assert not (l2_dist_attn and flash), 'l2 distance attention is not compatible with flash attention'
+
         self.scale = (dim_coor * dim_head) ** -0.5
         dim_inner = dim_head * heads
         self.heads = heads
@@ -104,11 +109,7 @@ class VNAttention(nn.Module):
         self.to_kv = VNLinear(dim, dim_inner * 2, bias_epsilon = bias_epsilon)
         self.to_out = VNLinear(dim_inner, dim, bias_epsilon = bias_epsilon)
 
-        self.l2_dist_attn = l2_dist_attn
-
-        # use l2 distance squared for attention
-        # this was used in the invariant point attention in alphafold2, vitgan, gigagan, and also analyzed in depth https://arxiv.org/abs/2006.04710
-        # have also tested this in equiformer variant https://github.com/lucidrains/equiformer-pytorch, where i found it to converge much nicer given the fit with spatial coordinates
+        self.attend = Attend(flash = flash, l2_dist = l2_dist_attn)
 
     def forward(self, x, mask = None):
         """
@@ -130,28 +131,11 @@ class VNAttention(nn.Module):
             q_input = x
 
         q, k, v = (self.to_q(q_input), *self.to_kv(x).chunk(2, dim = -2))
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) c -> b h n d c', h = self.heads), (q, k, v))
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) c -> b h n (d c)', h = self.heads), (q, k, v))
 
-        sim = einsum('b h i d c, b h j d c -> b h i j', q, k)
+        out = self.attend(q, k, v, mask = mask)
 
-        if self.l2_dist_attn:
-            # -cdist squared == (-q^2 + 2qk - k^2)
-            # so simply work off the qk above
-            q_squared = reduce(q ** 2, 'b h i d c -> b h i 1', 'sum')
-            k_squared = reduce(k ** 2, 'b h j d c -> b h 1 j', 'sum')
-            sim = sim * 2 - q_squared - k_squared
-
-        if exists(mask):
-            mask = rearrange(mask, 'b j -> b 1 1 j')
-            sim = sim.masked_fill(~mask, -torch.finfo(sim.dtype).max)
-
-        sim = sim * self.scale
-
-        attn = sim.softmax(dim = -1)
-
-        out = einsum('b h i j, b h j d c -> b h i d c', attn, v)
-
-        out = rearrange(out, 'b h n d c -> b n (h d) c')
+        out = rearrange(out, 'b h n (d c) -> b n (h d) c', c = c)
         return self.to_out(out)
 
 def VNFeedForward(dim, mult = 4, bias_epsilon = 0.):
@@ -219,7 +203,8 @@ class VNTransformerEncoder(nn.Module):
         ff_mult = 4,
         final_norm = False,
         bias_epsilon = 0.,
-        l2_dist_attn = False
+        l2_dist_attn = False,
+        flash_attn = False
     ):
         super().__init__()
         self.dim = dim
@@ -229,7 +214,7 @@ class VNTransformerEncoder(nn.Module):
 
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                VNAttention(dim = dim, dim_head = dim_head, heads = heads, bias_epsilon = bias_epsilon, l2_dist_attn = l2_dist_attn),
+                VNAttention(dim = dim, dim_head = dim_head, heads = heads, bias_epsilon = bias_epsilon, l2_dist_attn = l2_dist_attn, flash = flash_attn),
                 VNLayerNorm(dim),
                 VNFeedForward(dim = dim, mult = ff_mult, bias_epsilon = bias_epsilon),
                 VNLayerNorm(dim)
@@ -286,7 +271,8 @@ class VNTransformer(nn.Module):
         dim_coor = 3,
         reduce_dim_out = True,
         bias_epsilon = 0.,
-        l2_dist_attn = True,
+        l2_dist_attn = False,
+        flash_attn = False,
         translation_equivariance = False,
         translation_invariant = False
     ):
@@ -313,7 +299,8 @@ class VNTransformer(nn.Module):
             heads = heads,
             bias_epsilon = bias_epsilon,
             dim_coor = self.dim_coor_total,
-            l2_dist_attn = l2_dist_attn
+            l2_dist_attn = l2_dist_attn,
+            flash_attn = flash_attn
         )
 
         if reduce_dim_out:
